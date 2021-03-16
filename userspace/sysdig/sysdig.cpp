@@ -334,6 +334,49 @@ static void usage()
     );
 }
 
+double g_last_printed_progress_pct = 0;
+char g_prg_line_buf[512] = "";
+
+inline void clean_last_progress_line()
+{
+	uint32_t j;
+
+	for(j = 0; j < strlen(g_prg_line_buf); j++)
+	{
+		g_prg_line_buf[j] = ' ';
+	}
+	g_prg_line_buf[j] = 0;
+	
+	fprintf(stderr, "\r%s", g_prg_line_buf);
+}
+
+inline void output_progress(sinsp* inspector, sinsp_evt* ev)
+{
+	if(ev == NULL || (ev->get_num() % 10000 == 0))
+	{
+		string ps;
+		double progress_pct = inspector->get_read_progress_with_str(&ps);
+
+		if(progress_pct - g_last_printed_progress_pct > 0.1)
+		{
+			clean_last_progress_line();
+			if(ps == "")
+			{
+				snprintf(g_prg_line_buf, sizeof(g_prg_line_buf), "%.2lf", progress_pct);
+			}
+			else
+			{
+				snprintf(g_prg_line_buf, sizeof(g_prg_line_buf), "%s", ps.c_str());
+			}
+
+			fprintf(stderr, "\r%s", g_prg_line_buf);
+			//fprintf(stderr, "%s\n", g_prg_line_buf);
+			fflush(stderr);
+			g_last_printed_progress_pct = progress_pct;
+		}
+	}
+}
+
 void print_summary_table(sinsp* inspector,
 						 vector<summary_table_entry> &summary_table,
 						 uint32_t nentries)
@@ -540,7 +583,7 @@ static void chisels_do_timeout(sinsp_evt* ev)
 #endif
 }
 
-void handle_end_of_file(bool print_progress, sinsp_evt_formatter_with_plugin_support* formatter = NULL)
+void handle_end_of_file(sinsp* inspector, bool print_progress, sinsp_evt_formatter_with_plugin_support* formatter = NULL)
 {
 	string line;
 
@@ -558,7 +601,16 @@ void handle_end_of_file(bool print_progress, sinsp_evt_formatter_with_plugin_sup
 	//
 	if(print_progress)
 	{
-		fprintf(stderr, "100.00\n");
+		clean_last_progress_line();
+		if(inspector == NULL)
+		{
+			fprintf(stderr, "\r100.00\n");
+		}
+		else
+		{
+			output_progress(inspector, NULL);
+		}
+
 		fflush(stderr);
 	}
 
@@ -623,7 +675,6 @@ captureinfo do_inspect(sinsp* inspector,
 	int32_t res;
 	sinsp_evt* ev;
 	string line;
-	double last_printed_progress_pct = 0;
 	uint64_t duration_start = 0;
 
 	if(json)
@@ -642,7 +693,7 @@ captureinfo do_inspect(sinsp* inspector,
 			// End of capture, either because the user stopped it, or because
 			// we reached the event count specified with -n.
 			//
-			handle_end_of_file(print_progress, formatter);
+			handle_end_of_file(inspector, print_progress, formatter);
 			break;
 		}
 		res = inspector->next(&ev);
@@ -656,13 +707,18 @@ captureinfo do_inspect(sinsp* inspector,
 				// Give the chisels a chance to run their timeout logic.
 				//
 				chisels_do_timeout(ev);
+
+				if(print_progress)
+				{
+					output_progress(inspector, ev);
+				}
 			}
 
 			continue;
 		}
 		else if(res == SCAP_EOF)
 		{
-			handle_end_of_file(print_progress, formatter);
+			handle_end_of_file(inspector, print_progress, formatter);
 			break;
 		}
 		else if(res != SCAP_SUCCESS)
@@ -671,7 +727,7 @@ captureinfo do_inspect(sinsp* inspector,
 			// Event read error.
 			// Notify the chisels that we're exiting, and then die with an error.
 			//
-			handle_end_of_file(print_progress, formatter);
+			handle_end_of_file(inspector, print_progress, formatter);
 			throw sinsp_exception(inspector->getlasterr().c_str());
 		}
 
@@ -682,7 +738,7 @@ captureinfo do_inspect(sinsp* inspector,
 		{
 			if(ev->get_ts() - duration_start >= duration_to_tot_ns)
 			{
-				handle_end_of_file(print_progress, formatter);
+				handle_end_of_file(inspector, print_progress, formatter);
 				break;
 			}
 		}
@@ -690,17 +746,7 @@ captureinfo do_inspect(sinsp* inspector,
 
 		if(print_progress)
 		{
-			if(ev->get_num() % 10000 == 0)
-			{
-				double progress_pct = inspector->get_read_progress();
-
-				if(progress_pct - last_printed_progress_pct > 0.1)
-				{
-					fprintf(stderr, "%.2lf\n", progress_pct);
-					fflush(stderr);
-					last_printed_progress_pct = progress_pct;
-				}
-			}
+			output_progress(inspector, ev);
 		}
 
 		//
@@ -1048,6 +1094,7 @@ sysdig_init_res sysdig_init(int argc, char **argv)
 					}
 
 					g_plugin_input = true;
+					//print_progress = true;
 				}
 				break;
 #ifdef HAS_CHISELS
@@ -1323,7 +1370,7 @@ sysdig_init_res sysdig_init(int argc, char **argv)
 					}
 				}
 				break;
-            // getopt_long : '?' for an ambiguous match or an extraneous parameter
+			// getopt_long : '?' for an ambiguous match or an extraneous parameter
 			case '?':
 				delete inspector;
 				return sysdig_init_res(EXIT_FAILURE);
@@ -1549,7 +1596,7 @@ sysdig_init_res sysdig_init(int argc, char **argv)
 #if defined(HAS_CAPTURE)
 				bool open_success = true;
 
-				if(print_progress)
+				if(print_progress && !g_plugin_input)
 				{
 					fprintf(stderr, "the -P flag cannot be used with live captures.\n");
 					res.m_res = EXIT_FAILURE;
@@ -1754,29 +1801,29 @@ sysdig_init_res sysdig_init(int argc, char **argv)
 	}
 	catch(const sinsp_capture_interrupt_exception&)
 	{
-		handle_end_of_file(print_progress);
+		handle_end_of_file(NULL, print_progress);
 	}
 	catch(const scap_open_exception& e)
 	{
 		cerr << e.what() << endl;
-		handle_end_of_file(print_progress);
+		handle_end_of_file(NULL, print_progress);
 		res.m_res = e.scap_rc();
 	}
 	catch(const sinsp_exception& e)
 	{
 		cerr << e.what() << endl;
-		handle_end_of_file(print_progress);
+		handle_end_of_file(NULL, print_progress);
 		res.m_res = EXIT_FAILURE;
 	}
 	catch (const std::runtime_error& e)
 	{
 		cerr << e.what() << endl;
-		handle_end_of_file(print_progress);
+		handle_end_of_file(NULL, print_progress);
 		res.m_res = EXIT_FAILURE;
 	}
 	catch(...)
 	{
-		handle_end_of_file(print_progress);
+		handle_end_of_file(NULL, print_progress);
 		res.m_res = EXIT_FAILURE;
 	}
 
