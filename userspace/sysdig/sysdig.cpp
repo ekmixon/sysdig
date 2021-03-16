@@ -609,6 +609,7 @@ void handle_end_of_file(sinsp* inspector, bool print_progress, sinsp_evt_formatt
 		else
 		{
 			output_progress(inspector, NULL);
+			fprintf(stderr, "\n");
 		}
 
 		fflush(stderr);
@@ -1406,7 +1407,7 @@ sysdig_init_res sysdig_init(int argc, char **argv)
 		// If we are dumping events to file, enable progress printing so we can give
 		// feedback to the user
 		//
-		if(outfile != "")
+		if(outfile != "" && (infiles.size() != 0 || g_plugin_input == true))
 		{
 			print_progress = true;
 		}
