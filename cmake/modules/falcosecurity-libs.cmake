@@ -29,8 +29,9 @@ else()
   # default below In case you want to test against another falcosecurity/libs version just pass the variable - ie., `cmake
   # -DFALCOSECURITY_LIBS_VERSION=dev ..`
   if(NOT FALCOSECURITY_LIBS_VERSION)
-    set(FALCOSECURITY_LIBS_VERSION "9d15f29ae930421b83cae50b553ae7dfc6328e03")
-    set(FALCOSECURITY_LIBS_CHECKSUM "SHA256=cb8083f9500e66e867dced6b1388fb61aa49423ded485f5b36fe9f17ac589fe0")
+    # todo(leogr): set correct version and checksum once https://github.com/falcosecurity/libs/pull/33 gets merged
+    set(FALCOSECURITY_LIBS_VERSION "new/plugin-system")
+    # set(FALCOSECURITY_LIBS_CHECKSUM "SHA256=")
   endif()
 
   # cd /path/to/build && cmake /path/to/source
