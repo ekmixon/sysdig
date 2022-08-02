@@ -35,7 +35,9 @@ for release in release_nodes:
     version = version[:version.index(':')]
   # tracepoints only enabled >= 1.7.0
   if LooseVersion(version[1:]) >= LooseVersion('1.7'):
-    dockerFile = urllib2.urlopen('https://raw.githubusercontent.com/boot2docker/boot2docker/%s/Dockerfile' % (version)).read()
+    dockerFile = urllib2.urlopen(
+        f'https://raw.githubusercontent.com/boot2docker/boot2docker/{version}/Dockerfile'
+    ).read()
     for line in dockerFile.split('\n'):
       if re.search('ENV KERNEL_VERSION', line):
             kernel_version = line.split()[-1]
@@ -43,5 +45,4 @@ for release in release_nodes:
             aufs_branch = line.split()[-1]
       if re.search('ENV AUFS_COMMIT', line):
             aufs_commit = line.split()[-1]
-    print 'boot2docker-%s %s-boot2docker https://www.kernel.org/pub/linux/kernel/v4.x/linux-%s.tar.xz https://raw.githubusercontent.com/boot2docker/boot2docker/%s/kernel_config https://github.com/sfjro/aufs4-standalone %s %s' % \
-      (version[1:],kernel_version,kernel_version,version,aufs_branch,aufs_commit)
+    dockerFile = urllib2.urlopen('https://raw.githubusercontent.com/boot2docker/boot2docker/%s/Dockerfile' % (version)).read()

@@ -63,7 +63,7 @@ repos = {
 }
 
 def progress(distro, current, total, package):
-    sys.stderr.write('\r{} {}/{} {}               '.format(distro, current, total, package))
+    sys.stderr.write(f'\r{distro} {current}/{total} {package}               ')
 
 #
 # In our design you are not supposed to modify the code. The whole script is
@@ -74,8 +74,8 @@ def progress(distro, current, total, package):
 urls = set()
 URL_TIMEOUT=30
 
-if len(sys.argv) < 2 or not sys.argv[1] in repos:
-    sys.stderr.write("Usage: " + sys.argv[0] + " <distro>\n")
+if len(sys.argv) < 2 or sys.argv[1] not in repos:
+    sys.stderr.write(f"Usage: {sys.argv[0]}" + " <distro>\n")
     sys.exit(1)
 
 #
